@@ -19,20 +19,21 @@ static Sockaddr groupAddr;
 #define MAX_OTHER_RATS (MAX_RATS - 1)
 
 int main(int argc, char *argv[]) {
-  Loc x(1);
-  Loc y(5);
-  Direction dir(0);
   char *ratName;
 
   signal(SIGHUP, quit);
   signal(SIGINT, quit);
   signal(SIGTERM, quit);
 
-  getName("Welcome to CS244B MazeWar!\n\nYour Name", &ratName);
+  if (argc >= 2) {
+    ratName = strdup(argv[1]);
+  } else {
+    getName("Welcome to CS244B MazeWar!\n\nYour Name", &ratName);
+  }
+
   ratName[strlen(ratName) - 1] = 0;
 
   M = MazewarInstance::mazewarInstanceNew(string(ratName));
-  MazewarInstance *a = M.ptr();
   strncpy(M->myName_, ratName, NAMESIZE);
   free(ratName);
 
@@ -489,10 +490,6 @@ void processPacket(MWEvent *eventPacket) {
 
 /* ----------------------------------------------------------------------- */
 
-/* This will presumably be modified by you.
-   It is here to provide an example of how to open a UDP port.
-   You might choose to use a different strategy
- */
 void netInit() {
   Sockaddr nullAddr;
   Sockaddr *thisHost;

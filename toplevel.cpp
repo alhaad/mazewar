@@ -497,11 +497,17 @@ Score GetRatScore(RatIndexType ratId) {
 
 /* ----------------------------------------------------------------------- */
 /* This is just for the sample version, rewrite your own */
+// TODO(alhaad): Fix the need for this hackery.
+static char rat_name[NAMESIZE];
 char *GetRatName(RatIndexType ratId) {
   if (ratId.value() == M->myRatId().value()) {
     return (M->myName_);
   } else {
-    return ("Dummy");
+    for (int i = 0; i < strlen(M->rat(ratId).rat_name); i++) {
+      rat_name[i] = M->rat(ratId).rat_name[i];
+    }
+    rat_name[strlen(M->rat(ratId).rat_name)] = '\0';
+    return (rat_name);
   }
 }
 
@@ -557,6 +563,7 @@ void processRemoteStatePacket(StatePacket packet) {
   strncpy(rat.rat_name, packet.body.player_name, NAMESIZE);
   M->ratIs(rat, rat_index);
   SetRatPosition(rat_index, Loc(packet.body.rat_x_pos), Loc(packet.body.rat_y_pos), NORTH);
+  WriteScoreString(rat_index);
   updateView = TRUE;
 }
 

@@ -1,3 +1,6 @@
+#ifndef PACKET_H
+#define PACKET_H
+
 #include <stdint.h>
 
 // Data structures which are used by the multi-player version of the mazewar
@@ -51,3 +54,4 @@ typedef struct {
   Header header;
   TagResponseBody body;
 } TagResponsePacket;
+#endif

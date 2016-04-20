@@ -48,6 +48,9 @@ SOFTWARE.
 #include <string>
 #include "Exception.h"
 #include "Nominal.h"
+
+#include "packet.h"
+
 /* fundamental constants */
 
 #ifndef TRUE
@@ -343,6 +346,11 @@ void DoViewUpdate(void);
 void sendPacketToPlayer(RatId);
 void processPacket(MWEvent *);
 void netInit(void);
+
+StatePacket getStatePacket();
+void printStatePacket(StatePacket packet);
+void handleTimeout();
+void maybeSendHeartBeatPacket();
 
 /* winsys.c */
 void InitWindow(int, char **);

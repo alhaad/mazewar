@@ -7,9 +7,13 @@
 
 /* #define DEBUG */
 
+#include <stdint.h>
 #include <string>
+#include <time.h>
+
 #include "main.h"
 #include "mazewar.h"
+#include "packet.h"
 
 static bool updateView; /* true if update needed */
 MazewarInstance::Ptr M;
@@ -18,12 +22,24 @@ MazewarInstance::Ptr M;
 static Sockaddr groupAddr;
 #define MAX_OTHER_RATS (MAX_RATS - 1)
 
+/* Unique if of this player */
+static uint32_t player_id;
+
+/* Sequence number of the last packet sent out. */
+static uint32_t sequence_number = 0;
+
+/* Is my rat cloaked ? */
+static bool isCloaked = false;
+
 int main(int argc, char *argv[]) {
   char *ratName;
 
   signal(SIGHUP, quit);
   signal(SIGINT, quit);
   signal(SIGTERM, quit);
+
+  srand(time(NULL));
+  player_id = rand();
 
   if (argc >= 2) {
     ratName = strdup(argv[1]);
@@ -101,6 +117,10 @@ void play(void) {
           processPacket(&event);
           break;
 
+        case EVENT_TIMEOUT:
+          handleTimeout();
+          break;
+
         case EVENT_INT:
           quit(0);
           break;
@@ -115,6 +135,10 @@ void play(void) {
         case EVENT_NETWORK:
           processPacket(&event);
           break;
+
+        case EVENT_TIMEOUT:
+          handleTimeout();
+          break;
       }
 
     ratStates(); /* clean house */
@@ -125,6 +149,72 @@ void play(void) {
 
     /* Any info to send over network? */
   }
+}
+
+/* ----------------------------------------------------------------------- */
+
+StatePacket getStatePacket() {
+  Header header;
+  header.version = 1;
+  header.descriptor_type = 1;
+  header.payload_length = sizeof(StateBody);
+  header.player_id = player_id;
+  header.sequence_number = sequence_number++;
+
+  StateBody body;
+  if (isCloaked) {
+    body.rat_dir = 0;
+  } else {
+    switch (MY_DIR) {
+      case NORTH:
+        body.rat_dir = 1;
+        break;
+      case SOUTH:
+        body.rat_dir = 1 << 1;
+        break;
+      case EAST:
+        body.rat_dir = 1 << 2;
+        break;
+      case WEST:
+        body.rat_dir = 1 << 3;
+        break;
+    }
+  }
+  // TODO(alhaad): Add projectile.
+  body.projectile_dir = 0;
+  srand(time(NULL));
+  body.collision_token = rand();
+  body.rat_x_pos = MY_X_LOC;
+  body.rat_y_pos = MY_Y_LOC;
+  body.projectile_seq = ~0;
+  body.projectile_x_pos = ~0;
+  body.projectile_y_pos = ~0;
+  body.score = M->score().value();
+  strncpy(body.player_name, M->myName_, NAMESIZE);
+
+  StatePacket packet;
+  packet.header = header;
+  packet.body = body;
+  return packet;
+}
+/* ----------------------------------------------------------------------- */
+
+void printStatePacket(StatePacket packet) {
+  printf("Player name: %s", packet.body.player_name);
+}
+
+/* ----------------------------------------------------------------------- */
+
+void handleTimeout() {
+  maybeSendHeartBeatPacket();
+}
+
+/* ----------------------------------------------------------------------- */
+
+void maybeSendHeartBeatPacket() {
+  // TODO(alhaad): Determine when not to send heartbeat packet.
+  StatePacket packet = getStatePacket();
+  sendto((int)M->theSocket(), &packet, sizeof(StatePacket), 0, (struct sockaddr*) &groupAddr, sizeof(Sockaddr));
 }
 
 /* ----------------------------------------------------------------------- */

@@ -7,6 +7,8 @@
 
 /* #define DEBUG */
 
+#include <list>
+#include <map>
 #include <stdint.h>
 #include <string>
 #include <time.h>
@@ -14,6 +16,8 @@
 #include "main.h"
 #include "mazewar.h"
 #include "packet.h"
+
+using namespace std;
 
 static bool updateView; /* true if update needed */
 MazewarInstance::Ptr M;
@@ -31,6 +35,12 @@ static uint32_t sequence_number = 0;
 /* Is my rat cloaked ? */
 static bool isCloaked = false;
 
+/* A pool of unused Rat indices. */
+static list<RatIndexType> free_rat_index_list;
+
+/* A list of all other rats in the game. */
+static map<uint32_t, RatIndexType> player_id_to_rat_index;
+
 int main(int argc, char *argv[]) {
   char *ratName;
 
@@ -40,6 +50,10 @@ int main(int argc, char *argv[]) {
 
   srand(time(NULL));
   player_id = rand();
+
+  for (int i = 1; i < MAX_RATS; i++) {
+    free_rat_index_list.push_back(RatIndexType(i));
+  }
 
   if (argc >= 2) {
     ratName = strdup(argv[1]);
@@ -199,7 +213,14 @@ StatePacket getStatePacket() {
 }
 /* ----------------------------------------------------------------------- */
 
+void printHeader(Header header) {
+  printf("Player Id: %d", header.player_id);
+}
+
+/* ----------------------------------------------------------------------- */
+
 void printStatePacket(StatePacket packet) {
+  printHeader(packet.header);
   printf("Player name: %s", packet.body.player_name);
 }
 
@@ -475,7 +496,6 @@ Score GetRatScore(RatIndexType ratId) {
 }
 
 /* ----------------------------------------------------------------------- */
-
 /* This is just for the sample version, rewrite your own */
 char *GetRatName(RatIndexType ratId) {
   if (ratId.value() == M->myRatId().value()) {
@@ -531,51 +551,43 @@ void DoViewUpdate() {
 
 /* ----------------------------------------------------------------------- */
 
-/*
- * Sample code to send a packet to a specific destination
- */
-
-/*
- * Notice the call to ConvertOutgoing.  You might want to call ConvertOutgoing
- * before any call to sendto.
- */
-
-void sendPacketToPlayer(RatId ratId) {
-  /*
-          MW244BPacket pack;
-          DataStructureX *packX;
-
-          pack.type = PACKET_TYPE_X;
-          packX = (DataStructureX *) &pack.body;
-          packX->foo = d1;
-          packX->bar = d2;
-
-          ....
-
-          ConvertOutgoing(pack);
-
-          if (sendto((int)mySocket, &pack, sizeof(pack), 0,
-                     (Sockaddr) destSocket, sizeof(Sockaddr)) < 0)
-            { MWError("Sample error") };
-  */
+void processRemoteStatePacket(StatePacket packet) {
+  RatIndexType rat_index = player_id_to_rat_index.at(packet.header.player_id);
+  Rat rat = M->rat(rat_index);
+  strncpy(rat.rat_name, packet.body.player_name, NAMESIZE);
+  M->ratIs(rat, rat_index);
+  SetRatPosition(rat_index, Loc(packet.body.rat_x_pos), Loc(packet.body.rat_y_pos), NORTH);
+  updateView = TRUE;
 }
 
 /* ----------------------------------------------------------------------- */
 
-/* Sample of processPacket. */
 
 void processPacket(MWEvent *eventPacket) {
-  /*
           MW244BPacket		*pack = eventPacket->eventDetail;
-          DataStructureX		*packX;
+  Header *header = (Header*) &pack->body;
+  // Ignore packet if from self.
+  if (header->player_id == player_id) {
+    return;
+  }
 
-          switch(pack->type) {
-          case PACKET_TYPE_X:
-            packX = (DataStructureX *) &(pack->body);
-            break;
-          case ...
-          }
-  */
+  // Are we seeing this player for the first time?
+  if (player_id_to_rat_index.count(header->player_id) == 0) {
+    RatIndexType rat_index = free_rat_index_list.front();
+    free_rat_index_list.pop_front();
+    Rat rat = M->rat(rat_index);
+    rat.playing = TRUE;
+    player_id_to_rat_index.insert(make_pair(header->player_id, rat_index));
+    M->ratIs(rat, rat_index);
+  }
+
+  switch (header->descriptor_type) {
+    case 1:
+      processRemoteStatePacket(*(StatePacket*) (&pack->body));
+      break;
+    default:
+      assert(false);
+  }
 }
 
 /* ----------------------------------------------------------------------- */

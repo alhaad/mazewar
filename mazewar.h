@@ -159,6 +159,7 @@ class Rat {
   bool cloaked;
   Loc x, y;
   Direction dir;
+  RatName rat_name;
 };
 
 typedef RatAppearance RatApp_type[MAX_RATS];
@@ -275,7 +276,6 @@ extern MazewarInstance::Ptr M;
 extern unsigned short ratBits[];
 /* replace this with appropriate definition of your own */
 typedef struct {
-  unsigned char type;
   u_long body[256];
 } MW244BPacket;
 

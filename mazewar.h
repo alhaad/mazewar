@@ -155,7 +155,7 @@ class RatAppearance {
 
 class Rat {
  public:
-  Rat() : playing(0), cloaked(0), x(1), y(1), dir(NORTH), highest_sequence_number(0) {};
+  Rat() : playing(0), cloaked(0), x(1), y(1), dir(NORTH), highest_sequence_number(0), score(0) {};
   bool playing;
   bool cloaked;
   Loc x, y;
@@ -165,6 +165,7 @@ class Rat {
   uint32_t highest_sequence_number;
 
   time_t last_packet_timestamp;
+  Score score;
 };
 
 typedef RatAppearance RatApp_type[MAX_RATS];
@@ -358,6 +359,7 @@ void printStatePacket(StatePacket packet);
 void handleTimeout();
 void sendStatePacket();
 bool isSquareOccupied(int, int);
+void sendTagRequest();
 
 /* winsys.c */
 void InitWindow(int, char **);

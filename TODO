@@ -1,6 +1,7 @@
 // A list of stuff that needs to be kept track of:
-* Missile hit and score
+* fix command line arguments
 * network byte order
+* missile firer leaves without tag response
 * collision resolution w/ random token
 * wait before joining the game
 * answers

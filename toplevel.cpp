@@ -49,6 +49,12 @@ static list<RatIndexType> free_rat_index_list;
 /* A list of all other rats in the game. */
 static map<uint32_t, RatIndexType> player_id_to_rat_index;
 
+/* A list of potential tag messages*/
+static list<TagRequestBody> unacknowledged_tags;
+
+/* A map of tags that I have ACKed and the receiver of the tag.*/
+static map<uint32_t, uint32_t> acknowledged_tags;
+
 int main(int argc, char *argv[]) {
   char *ratName;
 
@@ -171,14 +177,18 @@ void play(void) {
 
 /* ----------------------------------------------------------------------- */
 
-StatePacket getStatePacket() {
+Header getHeader() {
   Header header;
   header.version = 1;
-  header.descriptor_type = 1;
   header.payload_length = sizeof(StateBody);
   header.player_id = player_id;
   header.sequence_number = sequence_number++;
+  return header;
+}
 
+/* ----------------------------------------------------------------------- */
+
+StatePacket getStatePacket() {
   StateBody body;
   if (isCloaked) {
     body.rat_dir = 0;
@@ -229,7 +239,8 @@ StatePacket getStatePacket() {
   strncpy(body.player_name, M->myName_, NAMESIZE);
 
   StatePacket packet;
-  packet.header = header;
+  packet.header = getHeader();
+  packet.header.descriptor_type = 1;
   packet.body = body;
   return packet;
 }
@@ -282,6 +293,8 @@ void incrementMissileLocation() {
 /* ----------------------------------------------------------------------- */
 
 void handleTimeout() {
+  sendTagRequest();
+
   if (hasMissile) {
     incrementMissileLocation();
   }
@@ -618,7 +631,7 @@ Score GetRatScore(RatIndexType ratId) {
   if (ratId.value() == M->myRatId().value()) {
     return (M->score());
   } else {
-    return (0);
+    return M->rat(ratId).score;
   }
 }
 
@@ -684,11 +697,37 @@ void DoViewUpdate() {
 
 /* ----------------------------------------------------------------------- */
 
+void sendTagRequest() {
+  for (list<TagRequestBody>::iterator it=unacknowledged_tags.begin(); it != unacknowledged_tags.end(); ++it) {
+    TagRequestPacket packet;
+    packet.header = getHeader();
+    packet.header.descriptor_type = 2;
+    packet.body = *it;
+    sendto((int)M->theSocket(), &packet, sizeof(TagRequestPacket), 0, (struct sockaddr*) &groupAddr, sizeof(Sockaddr));
+  }
+}
+
+/* ----------------------------------------------------------------------- */
+
 void processRemoteStatePacket(StatePacket packet) {
   RatIndexType rat_index = player_id_to_rat_index.at(packet.header.player_id);
   Rat rat = M->rat(rat_index);
-  // Set other rat name.
+
+  // Did we get tagged by this rat's projectile?
+  if (packet.body.projectile_seq != ~0 && packet.body.projectile_x_pos == MY_X_LOC && packet.body.projectile_y_pos == MY_Y_LOC) {
+    TagRequestBody request;
+    request.shooter_id = packet.header.player_id;
+    request.projectile_seq = packet.body.projectile_seq;
+    request.rat_x_pos = MY_X_LOC;
+    request.rat_y_pos = MY_Y_LOC;
+    request.rat_dir = isCloaked ? 0 : MY_DIR;
+    unacknowledged_tags.push_back(request);
+    sendTagRequest();
+  }
+
+  // Set other rat name and score.
   strncpy(rat.rat_name, packet.body.player_name, NAMESIZE);
+  rat.score = Score(packet.body.score);
 
   // Check the other rat's direction and cloaking status.
   rat.cloaked = FALSE;
@@ -721,6 +760,57 @@ void processRemoteStatePacket(StatePacket packet) {
 
 /* ----------------------------------------------------------------------- */
 
+// TODO(alhaad): Instead of a first come first serve policy, do something better.
+void processTagRequest(TagRequestPacket packet) {
+  if (packet.body.shooter_id != player_id) {
+    return;
+  }
+
+  if (acknowledged_tags.count(packet.body.projectile_seq) == 0) {
+    acknowledged_tags[packet.body.projectile_seq] = packet.header.player_id;
+    if (packet.body.rat_dir == 0) {
+      M->scoreIs(M->score().value() + 13);
+    } else {
+      M->scoreIs(M->score().value() + 11);
+    }
+      NewScoreCard();
+  }
+
+  TagResponsePacket response_packet;
+  response_packet.header = getHeader();
+  response_packet.header.descriptor_type = 4;
+  TagResponseBody body;
+  body.projectile_seq = packet.body.projectile_seq;
+  body.player_id = acknowledged_tags.at(packet.body.projectile_seq);
+  response_packet.body = body;
+  sendto((int)M->theSocket(), &response_packet, sizeof(TagResponsePacket), 0, (struct sockaddr*) &groupAddr, sizeof(Sockaddr));
+  clearSquare(missile_x, missile_y);
+  hasMissile = FALSE;
+  updateView = TRUE;
+}
+
+/* ----------------------------------------------------------------------- */
+
+void processTagResponse(TagResponsePacket packet) {
+  if (packet.body.player_id != player_id) {
+    return;
+  }
+  for (list<TagRequestBody>::iterator it=unacknowledged_tags.begin(); it != unacknowledged_tags.end(); ++it) {
+    if (it->projectile_seq == packet.body.projectile_seq) {
+      unacknowledged_tags.erase(it);
+      if (isCloaked) {
+        M->scoreIs(M->score().value() - 7);
+      } else {
+        M->scoreIs(M->score().value() - 5);
+      }
+      NewScoreCard();
+      updateView = TRUE;
+      break;
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 
 void processPacket(MWEvent *eventPacket) {
           MW244BPacket		*pack = eventPacket->eventDetail;
@@ -756,6 +846,12 @@ void processPacket(MWEvent *eventPacket) {
   switch (header->descriptor_type) {
     case 1:
       processRemoteStatePacket(*(StatePacket*) (&pack->body));
+      break;
+    case 2:
+      processTagRequest(*(TagRequestPacket*) (&pack->body));
+      break;
+    case 4:
+      processTagResponse(*(TagResponsePacket*) (&pack->body));
       break;
     default:
       assert(false);

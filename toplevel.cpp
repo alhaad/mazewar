@@ -73,17 +73,15 @@ int main(int argc, char *argv[]) {
     ratName = strdup(argv[1]);
   } else {
     getName("Welcome to CS244B MazeWar!\n\nYour Name", &ratName);
+  ratName[strlen(ratName) - 1] = 0;
   }
 
-  ratName[strlen(ratName) - 1] = 0;
 
   M = MazewarInstance::mazewarInstanceNew(string(ratName));
   strncpy(M->myName_, ratName, NAMESIZE);
   free(ratName);
 
   MazeInit(argc, argv);
-
-  NewPosition(M);
 
   play();
 

@@ -1,5 +1,4 @@
 // A list of stuff that needs to be kept track of:
-* network byte order
 * check for tagging while moving as well
 * missile firer leaves without tag response
 * collision resolution w/ random token

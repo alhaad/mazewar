@@ -185,45 +185,45 @@ Header getHeader() {
 StatePacket getStatePacket() {
   StateBody body;
   if (isCloaked) {
-    body.rat_dir = 0;
+    setRatDir(&body, 0);
   } else {
     switch (MY_DIR) {
       case NORTH:
-        body.rat_dir = 1;
+        setRatDir(&body, 1);
         break;
       case SOUTH:
-        body.rat_dir = 1 << 1;
+        setRatDir(&body, 1 << 1);
         break;
       case EAST:
-        body.rat_dir = 1 << 2;
+        setRatDir(&body, 1 << 2);
         break;
       case WEST:
-        body.rat_dir = 1 << 3;
+        setRatDir(&body, 1 << 3);
         break;
     }
   }
 
   if (!hasMissile) {
-    body.projectile_dir = 0;
+    setProjectileDir(&body, 0);
   } else {
     switch (missile_dir.value()) {
       case NORTH:
-        body.projectile_dir = 1;
+        setProjectileDir(&body, 1);
         break;
       case SOUTH:
-        body.projectile_dir = 1 << 1;
+        setProjectileDir(&body, 1 << 1);
         break;
       case EAST:
-        body.projectile_dir = 1 << 2;
+        setProjectileDir(&body, 1 << 2);
         break;
       case WEST:
-        body.projectile_dir = 1 << 3;
+        setProjectileDir(&body, 1 << 3);
         break;
     }
   }
 
   srand(time(NULL));
-  body.collision_token = rand();
+  setCollisionToken(&body, rand());
   body.rat_x_pos = MY_X_LOC;
   body.rat_y_pos = MY_Y_LOC;
   body.projectile_seq = hasMissile ? missile_seq : ~0;
@@ -237,18 +237,6 @@ StatePacket getStatePacket() {
   packet.header.descriptor_type = 1;
   packet.body = body;
   return packet;
-}
-/* ----------------------------------------------------------------------- */
-
-void printHeader(Header header) {
-  printf("Player Id: %d", header.player_id);
-}
-
-/* ----------------------------------------------------------------------- */
-
-void printStatePacket(StatePacket packet) {
-  printHeader(packet.header);
-  printf("Player name: %s", packet.body.player_name);
 }
 
 /* ----------------------------------------------------------------------- */
@@ -319,7 +307,7 @@ void handleTimeout() {
 /* ----------------------------------------------------------------------- */
 
 void sendStatePacket() {
-  StatePacket packet = getStatePacket();
+  StatePacket packet = htonStatePacket(getStatePacket());
   sendto((int)M->theSocket(), &packet, sizeof(StatePacket), 0, (struct sockaddr*) &groupAddr, sizeof(Sockaddr));
 }
 
@@ -676,6 +664,7 @@ void sendTagRequest() {
     packet.header = getHeader();
     packet.header.descriptor_type = 2;
     packet.body = *it;
+    packet = htonTagRequestPacket(packet);
     sendto((int)M->theSocket(), &packet, sizeof(TagRequestPacket), 0, (struct sockaddr*) &groupAddr, sizeof(Sockaddr));
   }
 }
@@ -693,7 +682,25 @@ void processRemoteStatePacket(StatePacket packet) {
     request.projectile_seq = packet.body.projectile_seq;
     request.rat_x_pos = MY_X_LOC;
     request.rat_y_pos = MY_Y_LOC;
-    request.rat_dir = isCloaked ? 0 : MY_DIR;
+  if (isCloaked) {
+    setRatDir(&request, 0);
+  } else {
+    switch (MY_DIR) {
+      case NORTH:
+        setRatDir(&request, 1);
+        break;
+      case SOUTH:
+        setRatDir(&request, 1 << 1);
+        break;
+      case EAST:
+        setRatDir(&request, 1 << 2);
+        break;
+      case WEST:
+        setRatDir(&request, 1 << 3);
+        break;
+    }
+}
+
     unacknowledged_tags.push_back(request);
     sendTagRequest();
   }
@@ -704,7 +711,7 @@ void processRemoteStatePacket(StatePacket packet) {
 
   // Check the other rat's direction and cloaking status.
   rat.cloaked = FALSE;
-  switch (packet.body.rat_dir) {
+  switch (getRatDir(packet.body)) {
     case 0:
       rat.cloaked = TRUE;
       break;
@@ -741,7 +748,7 @@ void processTagRequest(TagRequestPacket packet) {
 
   if (acknowledged_tags.count(packet.body.projectile_seq) == 0) {
     acknowledged_tags[packet.body.projectile_seq] = packet.header.player_id;
-    if (packet.body.rat_dir == 0) {
+    if (getRatDir(packet.body) == 0) {
       M->scoreIs(M->score().value() + 13);
     } else {
       M->scoreIs(M->score().value() + 11);
@@ -756,6 +763,7 @@ void processTagRequest(TagRequestPacket packet) {
   body.projectile_seq = packet.body.projectile_seq;
   body.player_id = acknowledged_tags.at(packet.body.projectile_seq);
   response_packet.body = body;
+  response_packet = htonTagResponsePacket(response_packet);
   sendto((int)M->theSocket(), &response_packet, sizeof(TagResponsePacket), 0, (struct sockaddr*) &groupAddr, sizeof(Sockaddr));
   clearSquare(missile_x, missile_y);
   hasMissile = FALSE;
@@ -788,44 +796,44 @@ void processTagResponse(TagResponsePacket packet) {
 
 void processPacket(MWEvent *eventPacket) {
           MW244BPacket		*pack = eventPacket->eventDetail;
-  Header *header = (Header*) &pack->body;
+  Header header = ntohHeader(*(Header*) (&pack->body));
   // Ignore packet if from self.
-  if (header->player_id == player_id) {
+  if (header.player_id == player_id) {
     return;
   }
 
   // Are we seeing this player for the first time?
-  if (player_id_to_rat_index.count(header->player_id) == 0) {
+  if (player_id_to_rat_index.count(header.player_id) == 0) {
     RatIndexType rat_index = free_rat_index_list.front();
     free_rat_index_list.pop_front();
     Rat rat = M->rat(rat_index);
     rat.playing = TRUE;
-    player_id_to_rat_index.insert(make_pair(header->player_id, rat_index));
+    player_id_to_rat_index.insert(make_pair(header.player_id, rat_index));
     M->ratIs(rat, rat_index);
   }
 
-  RatIndexType rat_index = player_id_to_rat_index.at(header->player_id);
+  RatIndexType rat_index = player_id_to_rat_index.at(header.player_id);
   Rat rat = M->rat(rat_index);
 
   rat.last_packet_timestamp = time(NULL);
 
   // Is this an out of sequence packet? If so, drop it.
-  if (rat.highest_sequence_number >= header->sequence_number) {
+  if (rat.highest_sequence_number >= header.sequence_number) {
     return;
   } else {
-    rat.highest_sequence_number = header->sequence_number;
+    rat.highest_sequence_number = header.sequence_number;
   }
   M->ratIs(rat, rat_index);
 
-  switch (header->descriptor_type) {
+  switch (header.descriptor_type) {
     case 1:
-      processRemoteStatePacket(*(StatePacket*) (&pack->body));
+      processRemoteStatePacket(ntohStatePacket(*(StatePacket*) (&pack->body)));
       break;
     case 2:
-      processTagRequest(*(TagRequestPacket*) (&pack->body));
+      processTagRequest(ntohTagRequestPacket(*(TagRequestPacket*) (&pack->body)));
       break;
     case 4:
-      processTagResponse(*(TagResponsePacket*) (&pack->body));
+      processTagResponse(ntohTagResponsePacket(*(TagResponsePacket*) (&pack->body)));
       break;
     default:
       assert(false);

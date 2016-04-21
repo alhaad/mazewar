@@ -33,7 +33,8 @@ static uint32_t player_id;
 static uint32_t sequence_number = 0;
 
 /* Is my rat cloaked ? */
-static bool isCloaked = false;
+static bool isCloaked = FALSE;
+static time_t cloaking_start_time = 0;
 
 /* A pool of unused Rat indices. */
 static list<RatIndexType> free_rat_index_list;
@@ -227,13 +228,17 @@ void printStatePacket(StatePacket packet) {
 /* ----------------------------------------------------------------------- */
 
 void handleTimeout() {
-  maybeSendHeartBeatPacket();
+  if (isCloaked && time(NULL) - cloaking_start_time >= 5) {
+    isCloaked = FALSE;
+  }
+  // Heartbeat packet.
+  // TODO(alhaad): Determine when not to send heartbeat packet.
+  sendStatePacket();
 }
 
 /* ----------------------------------------------------------------------- */
 
-void maybeSendHeartBeatPacket() {
-  // TODO(alhaad): Determine when not to send heartbeat packet.
+void sendStatePacket() {
   StatePacket packet = getStatePacket();
   sendto((int)M->theSocket(), &packet, sizeof(StatePacket), 0, (struct sockaddr*) &groupAddr, sizeof(Sockaddr));
 }
@@ -246,6 +251,7 @@ static Direction _rightTurn[NDIRECTION] = {EAST, WEST, SOUTH, NORTH};
 
 void aboutFace(void) {
   M->dirIs(_aboutFace[MY_DIR]);
+  sendStatePacket();
   updateView = TRUE;
 }
 
@@ -253,6 +259,7 @@ void aboutFace(void) {
 
 void leftTurn(void) {
   M->dirIs(_leftTurn[MY_DIR]);
+  sendStatePacket();
   updateView = TRUE;
 }
 
@@ -260,6 +267,7 @@ void leftTurn(void) {
 
 void rightTurn(void) {
   M->dirIs(_rightTurn[MY_DIR]);
+  sendStatePacket();
   updateView = TRUE;
 }
 
@@ -290,6 +298,7 @@ void forward(void) {
   if ((MY_X_LOC != tx) || (MY_Y_LOC != ty)) {
     M->xlocIs(Loc(tx));
     M->ylocIs(Loc(ty));
+    sendStatePacket();
     updateView = TRUE;
   }
 }
@@ -319,6 +328,7 @@ void backward() {
   if ((MY_X_LOC != tx) || (MY_Y_LOC != ty)) {
     M->xlocIs(Loc(tx));
     M->ylocIs(Loc(ty));
+    sendStatePacket();
     updateView = TRUE;
   }
 }
@@ -432,7 +442,19 @@ void shoot() { printf("Implement shoot()\n"); }
 
 /* ----------------------------------------------------------------------- */
 
-void cloak() { printf("Implement cloak()\n"); }
+void cloak() {
+  if (isCloaked) {
+    return;
+  }
+
+  if (time(NULL) - cloaking_start_time < 15 && cloaking_start_time != 0) {
+    return;
+  }
+
+  isCloaked = TRUE;
+  cloaking_start_time = time(NULL);
+  sendStatePacket();
+}
 
 /* ----------------------------------------------------------------------- */
 
@@ -560,9 +582,34 @@ void DoViewUpdate() {
 void processRemoteStatePacket(StatePacket packet) {
   RatIndexType rat_index = player_id_to_rat_index.at(packet.header.player_id);
   Rat rat = M->rat(rat_index);
+  // Set other rat name.
   strncpy(rat.rat_name, packet.body.player_name, NAMESIZE);
+
+  // Check the other rat's direction and cloaking status.
+  rat.cloaked = FALSE;
+  switch (packet.body.rat_dir) {
+    case 0:
+      rat.cloaked = TRUE;
+      break;
+    case 1:
+      rat.dir = Direction(NORTH);
+      break;
+    case 1<<1:
+      rat.dir = Direction(SOUTH);
+      break;
+    case 1<<2:
+      rat.dir = Direction(EAST);
+      break;
+    case 1<<3:
+      rat.dir = Direction(WEST);
+      break;
+    default:
+      assert(false);
+      break;
+  }
+
   M->ratIs(rat, rat_index);
-  SetRatPosition(rat_index, Loc(packet.body.rat_x_pos), Loc(packet.body.rat_y_pos), NORTH);
+  SetRatPosition(rat_index, Loc(packet.body.rat_x_pos), Loc(packet.body.rat_y_pos), rat.dir);
   WriteScoreString(rat_index);
   updateView = TRUE;
 }

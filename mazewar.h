@@ -350,7 +350,7 @@ void netInit(void);
 StatePacket getStatePacket();
 void printStatePacket(StatePacket packet);
 void handleTimeout();
-void maybeSendHeartBeatPacket();
+void sendStatePacket();
 
 /* winsys.c */
 void InitWindow(int, char **);

@@ -163,10 +163,6 @@ void play(void) {
           break;
       }
 
-    ratStates(); /* clean house */
-
-    manageMissiles();
-
     DoViewUpdate();
 
     /* Any info to send over network? */
@@ -658,27 +654,6 @@ void ConvertIncoming(MW244BPacket *p) {}
 
 /* This is just for the sample version, rewrite your own if necessary */
 void ConvertOutgoing(MW244BPacket *p) {}
-
-/* ----------------------------------------------------------------------- */
-
-/* This is just for the sample version, rewrite your own */
-void ratStates() {
-  /* In our sample version, we don't know about the state of any rats over
-     the net, so this is a no-op */
-}
-
-/* ----------------------------------------------------------------------- */
-
-/* This is just for the sample version, rewrite your own */
-void manageMissiles() {
-  /* Leave this up to you. */
-  /*
-  //You may find the following lines useful
-  //This subtracts one from the current rat's score and updates the display
-  M->scoreIs( M->score().value()-1 );
-  UpdateScoreCard(M->myRatId().value());
-  */
-}
 
 /* ----------------------------------------------------------------------- */
 

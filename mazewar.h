@@ -347,8 +347,6 @@ Score GetRatScore(RatIndexType);
 char *GetRatName(RatIndexType);
 void ConvertIncoming(MW244BPacket *);
 void ConvertOutgoing(MW244BPacket *);
-void ratState(void);
-void manageMissiles(void);
 void DoViewUpdate(void);
 void sendPacketToPlayer(RatId);
 void processPacket(MWEvent *);

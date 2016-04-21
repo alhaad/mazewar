@@ -357,6 +357,7 @@ StatePacket getStatePacket();
 void printStatePacket(StatePacket packet);
 void handleTimeout();
 void sendStatePacket();
+bool isSquareOccupied(int, int);
 
 /* winsys.c */
 void InitWindow(int, char **);

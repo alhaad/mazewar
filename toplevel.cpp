@@ -368,6 +368,11 @@ void forward(void) {
     default:
       MWError("bad direction in Forward");
   }
+
+  if (isSquareOccupied(tx, ty)) {
+    return;
+  }
+
   if ((MY_X_LOC != tx) || (MY_Y_LOC != ty)) {
     M->xlocIs(Loc(tx));
     M->ylocIs(Loc(ty));
@@ -398,6 +403,11 @@ void backward() {
     default:
       MWError("bad direction in Backward");
   }
+
+  if (isSquareOccupied(tx, ty)) {
+    return;
+  }
+
   if ((MY_X_LOC != tx) || (MY_Y_LOC != ty)) {
     M->xlocIs(Loc(tx));
     M->ylocIs(Loc(ty));
@@ -554,18 +564,28 @@ void quit(int sig) {
 
 /* ----------------------------------------------------------------------- */
 
+bool isSquareOccupied(int tx, int ty) {
+  for (int i = 1; i < MAX_RATS; i++) {
+    RatIndexType rat_index = RatIndexType(i);
+    Rat rat = M->rat(rat_index);
+    if (rat.playing && rat.x.value() == tx && rat.y.value() == ty) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/* ----------------------------------------------------------------------- */
+
 void NewPosition(MazewarInstance::Ptr m) {
   Loc newX(0);
   Loc newY(0);
   Direction dir(0); /* start on occupied square */
 
-  while (M->maze_[newX.value()][newY.value()]) {
+  while (M->maze_[newX.value()][newY.value()] || isSquareOccupied(newX.value(), newY.value())) {
     /* MAZE[XY]MAX is a power of 2 */
     newX = Loc(random() & (MAZEXMAX - 1));
     newY = Loc(random() & (MAZEYMAX - 1));
-
-    /* In real game, also check that square is
-       unoccupied by another rat */
   }
 
   /* prevent a blank wall at first glimpse */

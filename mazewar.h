@@ -46,6 +46,7 @@ SOFTWARE.
 #include "fwk/NamedInterface.h"
 
 #include <string>
+#include <time.h>
 #include "Exception.h"
 #include "Nominal.h"
 
@@ -162,6 +163,8 @@ class Rat {
   RatName rat_name;
   // The highest sequence number seen from thisrat.
   uint32_t highest_sequence_number;
+
+  time_t last_packet_timestamp;
 };
 
 typedef RatAppearance RatApp_type[MAX_RATS];

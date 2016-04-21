@@ -234,6 +234,21 @@ void handleTimeout() {
   // Heartbeat packet.
   // TODO(alhaad): Determine when not to send heartbeat packet.
   sendStatePacket();
+
+  // Remove all players who's heartbeat message was not recieved.
+  for (int i = 1; i < MAX_RATS; i++) {
+    RatIndexType defendent_index = RatIndexType(i);
+    Rat defendent = M->rat(defendent_index);
+    // TODO(alhaad): Fix the timeout interval.
+    if (defendent.playing && time(NULL) - defendent.last_packet_timestamp > 5) {
+      defendent.playing = FALSE;
+      free_rat_index_list.push_back(defendent_index);
+      M->ratIs(defendent, defendent_index);
+      ClearRatPosition(defendent_index);
+      NewScoreCard();
+      updateView = TRUE;
+}
+  }
 }
 
 /* ----------------------------------------------------------------------- */
@@ -635,15 +650,18 @@ void processPacket(MWEvent *eventPacket) {
     M->ratIs(rat, rat_index);
   }
 
-  // Is this an out of sequence packet? If so, drop it.
   RatIndexType rat_index = player_id_to_rat_index.at(header->player_id);
   Rat rat = M->rat(rat_index);
+
+  rat.last_packet_timestamp = time(NULL);
+
+  // Is this an out of sequence packet? If so, drop it.
   if (rat.highest_sequence_number >= header->sequence_number) {
     return;
   } else {
     rat.highest_sequence_number = header->sequence_number;
-    M->ratIs(rat, rat_index);
   }
+  M->ratIs(rat, rat_index);
 
   switch (header->descriptor_type) {
     case 1:

@@ -801,6 +801,7 @@ void processTagResponse(TagResponsePacket packet) {
       } else {
         M->scoreIs(M->score().value() - 5);
       }
+      NewPosition(M);
       NewScoreCard();
       updateView = TRUE;
       break;

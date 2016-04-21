@@ -635,6 +635,16 @@ void processPacket(MWEvent *eventPacket) {
     M->ratIs(rat, rat_index);
   }
 
+  // Is this an out of sequence packet? If so, drop it.
+  RatIndexType rat_index = player_id_to_rat_index.at(header->player_id);
+  Rat rat = M->rat(rat_index);
+  if (rat.highest_sequence_number >= header->sequence_number) {
+    return;
+  } else {
+    rat.highest_sequence_number = header->sequence_number;
+    M->ratIs(rat, rat_index);
+  }
+
   switch (header->descriptor_type) {
     case 1:
       processRemoteStatePacket(*(StatePacket*) (&pack->body));

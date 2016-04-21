@@ -154,12 +154,14 @@ class RatAppearance {
 
 class Rat {
  public:
-  Rat() : playing(0), cloaked(0), x(1), y(1), dir(NORTH){};
+  Rat() : playing(0), cloaked(0), x(1), y(1), dir(NORTH), highest_sequence_number(0) {};
   bool playing;
   bool cloaked;
   Loc x, y;
   Direction dir;
   RatName rat_name;
+  // The highest sequence number seen from thisrat.
+  uint32_t highest_sequence_number;
 };
 
 typedef RatAppearance RatApp_type[MAX_RATS];

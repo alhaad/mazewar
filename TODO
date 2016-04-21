@@ -1,6 +1,7 @@
 // A list of stuff that needs to be kept track of:
-* Missile drawing
 * Missile hit and score
 * collision resolution
 * wait before joining the game
 * answers
+* network byte order
+* see other people's projectiles

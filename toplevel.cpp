@@ -36,6 +36,13 @@ static uint32_t sequence_number = 0;
 static bool isCloaked = FALSE;
 static time_t cloaking_start_time = 0;
 
+/* Is there an active missile fired by this rat? If so, where? */
+static bool hasMissile = FALSE;
+static uint32_t missile_seq = 0;
+static Loc missile_x(0);
+static Loc missile_y(0);
+static Direction missile_dir(0);
+
 /* A pool of unused Rat indices. */
 static list<RatIndexType> free_rat_index_list;
 
@@ -71,10 +78,6 @@ int main(int argc, char *argv[]) {
   MazeInit(argc, argv);
 
   NewPosition(M);
-
-  /* So you can see what a Rat is supposed to look like, we create
-  one rat in the single player mode Mazewar.
-  It doesn't move, you can't shoot it, you can just walk around it */
 
   play();
 
@@ -195,15 +198,33 @@ StatePacket getStatePacket() {
         break;
     }
   }
-  // TODO(alhaad): Add projectile.
-  body.projectile_dir = 0;
+
+  if (!hasMissile) {
+    body.projectile_dir = 0;
+  } else {
+    switch (missile_dir.value()) {
+      case NORTH:
+        body.projectile_dir = 1;
+        break;
+      case SOUTH:
+        body.projectile_dir = 1 << 1;
+        break;
+      case EAST:
+        body.projectile_dir = 1 << 2;
+        break;
+      case WEST:
+        body.projectile_dir = 1 << 3;
+        break;
+    }
+  }
+
   srand(time(NULL));
   body.collision_token = rand();
   body.rat_x_pos = MY_X_LOC;
   body.rat_y_pos = MY_Y_LOC;
-  body.projectile_seq = ~0;
-  body.projectile_x_pos = ~0;
-  body.projectile_y_pos = ~0;
+  body.projectile_seq = hasMissile ? missile_seq : ~0;
+  body.projectile_x_pos = hasMissile ? missile_x.value() : ~0;
+  body.projectile_y_pos = hasMissile ? missile_y.value() : ~0;
   body.score = M->score().value();
   strncpy(body.player_name, M->myName_, NAMESIZE);
 
@@ -227,7 +248,44 @@ void printStatePacket(StatePacket packet) {
 
 /* ----------------------------------------------------------------------- */
 
+void incrementMissileLocation() {
+  register int tx = missile_x.value();
+  register int ty = missile_y.value();
+
+  switch (missile_dir.value()) {
+    case NORTH:
+      if (!M->maze_[tx + 1][ty]) tx++;
+      break;
+    case SOUTH:
+      if (!M->maze_[tx - 1][ty]) tx--;
+      break;
+    case EAST:
+      if (!M->maze_[tx][ty + 1]) ty++;
+      break;
+    case WEST:
+      if (!M->maze_[tx][ty - 1]) ty--;
+      break;
+    default:
+      MWError("bad direction in Forward");
+  }
+  if ((missile_x.value() != tx) || (missile_y.value() != ty)) {
+    showMissile(Loc(tx), Loc(ty), missile_dir, missile_x, missile_y, true);
+    missile_x = Loc(tx);
+    missile_y = Loc(ty);
+  } else {
+    clearSquare(missile_x, missile_y);
+    hasMissile = FALSE;
+  }
+  updateView = TRUE;
+}
+
+/* ----------------------------------------------------------------------- */
+
 void handleTimeout() {
+  if (hasMissile) {
+    incrementMissileLocation();
+  }
+
   if (isCloaked && time(NULL) - cloaking_start_time >= 5) {
     isCloaked = FALSE;
   }
@@ -453,7 +511,19 @@ void peekStop() {
 
 /* ----------------------------------------------------------------------- */
 
-void shoot() { printf("Implement shoot()\n"); }
+void shoot() {
+  if (hasMissile) {
+    return;
+  }
+  hasMissile = TRUE;
+  missile_seq++;
+  missile_x = MY_X_LOC;
+  missile_y = MY_Y_LOC;
+  missile_dir = MY_DIR;
+  showMissile(missile_x, missile_y, missile_dir, 0, 0, false);
+  sendStatePacket();
+  updateView = TRUE;
+}
 
 /* ----------------------------------------------------------------------- */
 
